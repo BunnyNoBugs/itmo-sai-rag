@@ -58,12 +58,12 @@ class RAGPipeline:
                  store: VectorStore,
                  hyde: bool = False,
                  do_planning: bool = False,
-                 return_retrieved_docs: bool = False):
+                 return_intermediate_results: bool = False):
         self._llm = llm
         self._store = store
         self._hyde = hyde
         self._do_planning = do_planning
-        self._return_retrieved_docs = return_retrieved_docs
+        self._return_intermediate_results = return_intermediate_results
 
     def build_chain(self) -> Runnable:
         retriever = self._store.as_retriever(search_kwargs={"k": 3})
@@ -75,32 +75,34 @@ class RAGPipeline:
                     | self._llm
                     | HydeOutputParser()
             )
-            retrieving_chain = RunnableParallel(retrieved_docs=hyde_chain | retriever)
+            retrieving_chain = (
+                    hyde_chain
+                    | RunnableParallel(retrieved_docs=retriever, hyde_doc=RunnablePassthrough())
+            )
         else:
-            retrieving_chain = RunnableParallel(retrieved_docs=retriever)
+            retrieving_chain = RunnableParallel(retrieved_docs=retriever, hyde_doc=lambda x: None)  # todo: simplify
 
         context_chain = RunnableParallel(
-            context=itemgetter('retrieved_docs') | prepare_context,
+            context=itemgetter('retrieval_result') | prepare_context,
             question=itemgetter('question'),
-            retrieved_docs=itemgetter('retrieved_docs')
+            retrieval_result=itemgetter('retrieval_result')
         )
 
         @chain
         def generate_answer(query_components):
-            # because itemgetter in a chain returns a nested dict
-            retrieved_docs = query_components.pop('retrieved_docs')['retrieved_docs']
+            retrieval_result = query_components.pop('retrieval_result')
 
             qa_prompt = PromptTemplate(template=answer_prompt_template, input_variables=["context", "question"])
             answer_chain = (qa_prompt | self._llm)
             answer = answer_chain.invoke(query_components)
 
-            if self._return_retrieved_docs:
-                return {'response': answer, 'retrieved_docs': retrieved_docs}
+            if self._return_intermediate_results:
+                return {'response': answer, **retrieval_result}
             else:
                 return {'response': answer}
 
         rag_chain = (
-                RunnableParallel(retrieved_docs=retrieving_chain, question=RunnablePassthrough())
+                RunnableParallel(retrieval_result=retrieving_chain, question=RunnablePassthrough())
                 | context_chain
                 | generate_answer
         )
