@@ -41,7 +41,7 @@ hyde_prompt_template = """
 @chain
 def prepare_context(retrieval_result):
     docs = retrieval_result['retrieved_docs']
-    context = "\n\n".join(doc.page_content for doc in docs)
+    context = "\n".join([f"Параграф {i + 1}: {doc.page_content}" for i, doc in enumerate(docs)])
     return context
 
 
