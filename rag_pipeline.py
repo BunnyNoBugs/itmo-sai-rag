@@ -118,7 +118,7 @@ class RAGPipeline:
         self._do_planning = do_planning
         self._return_intermediate_results = return_intermediate_results
 
-    def build_chain(self) -> Runnable:
+    def build_chain(self, retrieval_only: bool = False) -> Runnable:
         retriever = self._store.as_retriever(search_kwargs={"k": 3})
 
         if self._hyde:
@@ -159,6 +159,9 @@ class RAGPipeline:
 
         else:
             retrieving_chain = RunnableParallel(retrieved_docs=retriever)
+
+        if retrieval_only:
+            return retrieving_chain
 
         context_chain = RunnableParallel(
             context=itemgetter('retrieval_result') | prepare_context,
