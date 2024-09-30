@@ -1,4 +1,4 @@
-A prototype of a RAG system built with langchain and Llama 3
+### A prototype of a RAG system built with langchain and Llama 3
 
 Experiments to improve quality include:
 * embedders fine-tuning
